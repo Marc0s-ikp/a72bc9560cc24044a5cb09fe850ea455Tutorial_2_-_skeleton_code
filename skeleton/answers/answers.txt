@@ -1,9 +1,32 @@
-QS1. 
+Qs1. 
  The test-and-set locks that we studied in the lectures all use a single atomic memory
 location. The relaxed memory ordering ensure sequential consistency per location. If
 we change the memory orderings associated with all atomic operations in a test-and-set
 implementation, then:
+
 • Does it become possible for more than one thread to believe that it holds the lock?
-Single-location coherence + Atomic RMW guarantees: Even with std::memory_order_relaxed, the C++ memory model guarantees sequential consistency per single atomic location (also called cache coherence). Every thread agrees on a single total modification order for lock_bit_. On top of that, C++ guarantees that an atomic Read-Modify-Write (RMW) operation (like exchange(true)) always reads the very latest value in that modification order immediately prior to writing. So once one thread swaps false $\to$ true, the next thread's exchange is guaranteed to see true until someone explicitly writes false in Unlock(). 
+Single-location coherence + Atomic RMW guarantees: Even with std::memory_order_relaxed,
+ the C++ memory model guarantees sequential consistency per single atomic location (also called cache coherence). 
+ Every thread agrees on a single total modification order for lock_bit_. On top of that, C++ guarantees that an atomic
+  Read-Modify-Write (RMW) operation (like exchange(true)) always reads the very latest value in that modification order 
+  immediately prior to writing. So once one thread swaps false $\to$ true, the next thread's exchange is guaranteed to see true 
+  until someone explicitly writes false in Unlock(). 
+
 • Can the lock still be used to avoid races on shared data?
-Zero happens-before across other locations: Just like you said, relaxed gives no synchronizes-with or happens-before relationships for anything outside of lock_bit_ itself. Both the compiler and the CPU can hoist or sink reads/writes to the shared data right past the Lock() and Unlock() calls, causing a data race.
+Zero happens-before across other locations: Just like you said, relaxed gives no synchronizes-with or happens-before relationships 
+for anything outside of lock_bit_ itself. Both the compiler and the CPU can hoist or sink reads/writes to the shared data right past 
+the Lock() and Unlock() calls, causing a data race.
+
+----------------------------------------------------------------------------------------------
+Qs5.
+What feature of ALocks means that they are unlikely to be useful as general-purpose
+locks?
+Fixed maximum capacity (kCapacity) known in advance: If more than kCapacity (e.g., 64)
+ threads try to acquire the lock concurrently, the modulo % kCapacity wraps around and two 
+ threads get assigned the exact same slot, breaking mutual exclusion!
+Massive memory footprint per lock: With 64-byte padding per slot and kCapacity = 64, a single
+ SpinLockALockPadded object takes $64 \times 64 = 4096\text{ bytes}$ (4 KB) of memory 
+ (compared to 1 byte for a TAS lock or 8–16 bytes for a ticket lock/futex)! If a program has 
+ thousands of locks (e.g., one per node in a data structure), ALocks would waste megabytes of RAM.
+Thread-local storage per lock instance: Each thread has to remember my_slot_ between Lock() 
+and Unlock() for each lock it holds, which is awkward to manage dynamically when a program has many lock instances.
