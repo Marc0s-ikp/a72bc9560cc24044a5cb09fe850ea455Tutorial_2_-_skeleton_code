@@ -9,17 +9,19 @@ class SpinLockSimpleRelaxed {
   SpinLockSimpleRelaxed() {}
 
   void Lock() {
-    // TODO
+    while (lock_bit_.exchange(true, std::memory_order_relaxed)) {
+    }
   }
 
   void Unlock() {
-    // TODO
+    lock_bit_.store(false, std::memory_order_relaxed);
   }
 
   [[nodiscard]] static std::string GetName() { return "Simple relaxed"; }
 
  private:
-  // TODO
+  std::atomic<bool> lock_bit_{false};
 };
+
 
 #endif  // SPIN_LOCK_SIMPLE_RELAXED_H

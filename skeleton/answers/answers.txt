@@ -1,0 +1,9 @@
+QS1. 
+ The test-and-set locks that we studied in the lectures all use a single atomic memory
+location. The relaxed memory ordering ensure sequential consistency per location. If
+we change the memory orderings associated with all atomic operations in a test-and-set
+implementation, then:
+• Does it become possible for more than one thread to believe that it holds the lock?
+Single-location coherence + Atomic RMW guarantees: Even with std::memory_order_relaxed, the C++ memory model guarantees sequential consistency per single atomic location (also called cache coherence). Every thread agrees on a single total modification order for lock_bit_. On top of that, C++ guarantees that an atomic Read-Modify-Write (RMW) operation (like exchange(true)) always reads the very latest value in that modification order immediately prior to writing. So once one thread swaps false $\to$ true, the next thread's exchange is guaranteed to see true until someone explicitly writes false in Unlock(). 
+• Can the lock still be used to avoid races on shared data?
+Zero happens-before across other locations: Just like you said, relaxed gives no synchronizes-with or happens-before relationships for anything outside of lock_bit_ itself. Both the compiler and the CPU can hoist or sink reads/writes to the shared data right past the Lock() and Unlock() calls, causing a data race.
