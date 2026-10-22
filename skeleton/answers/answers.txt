@@ -30,3 +30,18 @@ Massive memory footprint per lock: With 64-byte padding per slot and kCapacity =
  thousands of locks (e.g., one per node in a data structure), ALocks would waste megabytes of RAM.
 Thread-local storage per lock instance: Each thread has to remember my_slot_ between Lock() 
 and Unlock() for each lock it holds, which is awkward to manage dynamically when a program has many lock instances.
+
+----------------------------------------------------------------------------------------------
+Qs6.
+You will likely find that, unless you use very large arrays, you do not see much per
+formance improvement when using your fork-join version with multiple threads, and a
+single-threaded version of your fork-join program will likely exhibit a slow-down.
+Why do you think this is the case?
+Massive OS Thread Creation & Destruction Overhead: Creating a std::thread (pthread_create / clone syscall in Linux) 
+and joining it (pthread_join) requires entering the OS kernel, allocating thread stacks and kernel scheduling structures, 
+waking up CPU cores, and tearing them all down. Even if spawning and joining a single thread only takes ~25 microseconds, 
+doing that $50,000 \times 4 = 200,000$ times adds up to several seconds of pure OS syscall overhead!
+Tiny Amount of Useful Work per Iteration: With vector_size = 1600, each blur iteration only does $1600$ floating-point 
+additions and divisions—which takes a modern CPU less than 1 microsecond! So your threads spend 99.9% of their time being 
+created and destroyed by the OS, and 0.1% of their time actually blurring numbers. (Even with 1 thread, fork_join spawns 
+and destroys 50,000 OS threads compared to 0 in sequential, explaining the 64 ms $\to$ 6,906 ms slowdown!)

@@ -21,24 +21,97 @@ static void RepeatedBlurBarrierNoTls(std::vector<double>& data,
 static void RepeatedBlurBarrier(std::vector<double>& data,
                                 size_t num_blur_iterations,
                                 size_t num_threads) {
-  // Avoid warning about parameters not being used; remove once you
-  // flesh out your solution.
-  (void)data;
-  (void)num_blur_iterations;
-  (void)num_threads;
-  // TODO
+  std::vector<double> temporary_buffer(data.size());
+  temporary_buffer[0] = data[0];
+  temporary_buffer[data.size() - 1] = data[data.size() - 1];
+
+  SenseReversingBarrier barrier(num_threads);
+  const size_t chunk_size = data.size() / num_threads;
+
+  std::vector<std::thread> threads;
+  threads.reserve(num_threads);
+
+  for (size_t t = 0; t < num_threads; t++) {
+    const size_t start_index = (t == 0) ? 1 : t * chunk_size;
+    const size_t end_index =
+        (t == num_threads - 1) ? data.size() - 1 : (t + 1) * chunk_size;
+
+    threads.emplace_back([&data, &temporary_buffer, &barrier, start_index,
+                          end_index, num_blur_iterations]() {
+      std::vector<double>* current = &data;
+      std::vector<double>* next = &temporary_buffer;
+
+      for (size_t blur_iteration = 0; blur_iteration < num_blur_iterations;
+           blur_iteration++) {
+        for (size_t index = start_index; index < end_index; index++) {
+          (*next)[index] =
+              ((*current)[index - 1] + (*current)[index] + (*current)[index + 1]) /
+              3.0;
+        }
+        barrier.Await();
+        auto temp = current;
+        current = next;
+        next = temp;
+      }
+    });
+  }
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  if ((num_blur_iterations % 2) != 0) {
+    data = std::move(temporary_buffer);
+  }
+
+
 }
 
 static void RepeatedBlurForkJoin(std::vector<double>& data,
                                  size_t num_blur_iterations,
                                  size_t num_threads) {
-  // Avoid warning about parameters not being used; remove once you
-  // flesh out your solution.
-  (void)data;
-  (void)num_blur_iterations;
-  (void)num_threads;
-  // TODO
+  std::vector<double> temporary_buffer(data.size());
+  temporary_buffer[0] = data[0];
+  temporary_buffer[data.size() - 1] = data[data.size() - 1];
+
+  std::vector<double>* current = &data;
+  std::vector<double>* next = &temporary_buffer;
+
+  const size_t chunk_size = data.size() / num_threads;
+
+for (size_t blur_iteration = 0; blur_iteration < num_blur_iterations;
+       blur_iteration++) {
+    std::vector<std::thread> threads;
+    threads.reserve(num_threads);
+
+    for (size_t t = 0; t < num_threads; t++) {
+      const size_t start_index = (t == 0) ? 1 : t * chunk_size;
+      const size_t end_index =
+          (t == num_threads - 1) ? data.size() - 1 : (t + 1) * chunk_size;
+
+      threads.emplace_back([current, next, start_index, end_index]() {
+        for (size_t index = start_index; index < end_index; index++) {
+          (*next)[index] = ((*current)[index - 1] + (*current)[index] +
+                            (*current)[index + 1]) /
+                           3.0;
+        }
+      });
+    }
+
+    for (auto& thread : threads) {
+      thread.join();
+    }
+
+    auto temp = current;
+    current = next;
+    next = temp;
+  }
+
+  // If the final data has ended up in |temporary_buffer|, move it to |data|.
+  if ((num_blur_iterations % 2) != 0) {
+    data = std::move(temporary_buffer);
+  }
 }
+
 
 static void RepeatedBlurSequential(std::vector<double>& data,
                                    size_t num_blur_iterations) {
